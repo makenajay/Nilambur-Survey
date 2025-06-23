@@ -1,0 +1,706 @@
+---
+title: "Nilambur_Survey_Raking_HTML"
+author: "Ajay Maken"
+date: "2025-06-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, results = "asis")
+```
+
+```{r}
+library(dplyr)
+library(rvest)
+library(stringr)
+library(writexl)
+library(readxl)
+library(data.table)
+library(purrr)
+library(knitr)
+library(ggplot2)
+library(sf)
+library(tidyr)
+library(ggthemes)
+library(here)
+library(stringr)
+library(scales)
+library(lubridate)
+library(flextable)
+library(ggrepel) 
+library(survey)
+library(kableExtra)
+library(SDAResources)
+```
+
+## Final Assessment on the survey:
+
+**Prediction**: Through the survey and the methodology as described as under, the total difference expected between the Votes of UDF and LDF (Victory for UDF) was supposed to be **10,824 Votes.** Also predicted was the UDH and LDF difference of **6.19% votes.**
+
+**The Results**: UDF won by **11,077 Votes**. And the actual UDH and LDF difference was **6.29% votes**.
+
+**Methodological Overview: Iterative Raking and Analysis Workflow**
+
+This section details the statistical method used to analyze the Nilambur survey data and provides a step-by-step summary of the entire process, from initial data cleaning to the final weighted analysis.
+
+**What is Iterative Raking?**
+
+Iterative Raking (also known as RIM weighting or sample balancing) is a statistical procedure used to adjust the weights of survey respondents to make the sample more representative of a target population. In survey research, it is rare for a sample's demographic profile to perfectly mirror the population it comes from. For instance, a survey might happen to include a higher percentage of young people or a lower percentage of women than exist in the actual population. This discrepancy, known as sampling bias, can lead to inaccurate conclusions.
+
+Raking corrects for this bias. The process works by iteratively adjusting the weight of each respondent until the sample's marginal distributions for key demographic variables (e.g., the percentage of males and females, the percentage of different age groups) match the known distributions of those same variables in the true population.
+
+A key feature of raking is that it only requires the marginal population totals, not the joint totals. For example, to rake by age and gender, we only need to know:
+
+-   The total number of males and females in the population.
+
+-   The total number of people in each age bracket (e.g., 18-23, 24-30, etc.).
+
+We do not need to know the joint distribution (e.g., the exact number of males aged 18-23). This makes it a very powerful and flexible technique. By ensuring our sample's demographics align with reality, we can produce more accurate and reliable estimates for our variables of interest, such as MLA and government preference.
+
+**Summary of the Analysis Workflow:**
+
+**The analysis of the Nilambur survey data was conducted in several sequential steps:**
+
+**Data Loading and Cleaning:**
+
+The raw survey data was loaded from the .csv file. Relevant columns were selected, and several variables (\``Category_Caste_1`, `Pref_Govt`, `Gender`, `Age`) were recoded from their numeric codes into descriptive character strings for clarity. Essential data cleaning was performed, such as correcting spellings and standardizing category names to ensure consistency. A Broad_Category variable was created to group detailed caste categories into broader religious and social groups for the weighting process.
+
+**Exploratory Data Analysis (Unweighted):**
+
+Before applying any weights, an initial analysis was performed on the raw data. This involved calculating the unweighted proportions for key variables like MLA preference. Crucially, this step also involved comparing the demographic profile of the survey respondents (for Gender, Age, and Broad Category) against the known actual population data for Nilambur. This comparison highlighted the specific demographic imbalances in our sample that needed to be corrected.
+
+**Preparation for Raking:**
+
+The known population proportions for Gender, Age, and Broad_Category were used to create population target tables. These tables define the exact distributions that our weighted sample should match.
+
+**Survey Design and Raking:**
+
+Using the survey package in R, an unweighted survey design object was created, assigning an initial weight of 1 to every respondent. The rake() function was then applied. This function took our survey data and the population target tables as input and performed the iterative raking procedure, generating a new set of weights for each respondent.
+
+**Verification and Final Analysis:**
+
+The success of the raking process was verified by using the `svymean()` function to check the weighted proportions of the raking variables (Gender, Age, Broad_Category). The output confirmed that the weighted sample now mirrored the population distributions.
+
+**Generating Weighted Results:**
+
+With the new weights, the final analysis was conducted.
+
+The weighted proportions for MLA Preference and Government Preference were calculated.
+
+To provide a measure of uncertainty, the Standard Error (SE) and the Margin of Error (MOE) at a 95% confidence interval were also calculated for the weighted estimates.
+
+A final summary table was produced, comparing the initial Unweighted Proportions against the final, more accurate Weighted Proportions.
+
+Finally, a weighted crosstabulation was created using `svyby()` to explore the relationship between MLA choice and preferred government, providing deeper insights into the electorate's preferences.
+
+**Assumptions**:
+
+-   Response depends only on the row and column margins (***sum of distributions, not joint distributions)***, not individual cell.
+-   Works well if sample sizes in cells are not too small.
+-   May not converge if some cells have 0 sample counts.
+-   Over-adjustment risk if added dimension is weakly related to the variable of interest.
+
+```{r}
+
+Nilambur_Survey_Raw <- fread("Nilambur_Round_3.csv", encoding = "UTF-8") %>%
+  select(
+    Date_Collected,
+    `Booth_No`,
+    Area_Type,
+    Main_Issue,
+    MLA_Name_Pref,
+    Satisfaction_Level_MLA,
+    Satisfaction_Level_State_Govt,
+    Pref_Govt,
+    Caste_1,
+    Category_Caste_1,
+    Caste_2,
+    Category_Caste_2,
+    Christian_Group,
+    Gender,
+    Age,
+    Occupation
+  ) %>%
+  
+ ## 3) Recode Category_Caste_1 from numeric → character
+  mutate(
+    Category_Caste_1 = case_when(
+      Category_Caste_1 == 1 ~ "Hindu General",
+      Category_Caste_1 == 2 ~ "Hindu OBC",
+      Category_Caste_1 == 3 ~ "Hindu SC",
+      Category_Caste_1 == 4 ~ "Hindu ST",
+      Category_Caste_1 == 5 ~ "Muslim",
+      Category_Caste_1 == 6 ~ "Christian",
+      Category_Caste_1 == 7 ~ "Others",
+      TRUE                  ~ as.character(Category_Caste_1)
+    )
+  ) %>%
+  
+  ## 5) Recode Pref_Govt from numeric → character
+  mutate(
+    Pref_Govt = case_when(
+      Pref_Govt == 1 ~ "UDF",
+      Pref_Govt == 2 ~ "LDF",
+      Pref_Govt == 3 ~ "NDA",
+      Pref_Govt == 4 ~ "CNS",
+      Pref_Govt == 5 ~ "Others",
+      TRUE           ~ as.character(Pref_Govt)
+    )
+  )
+
+# Correct Christian Spelling
+Nilambur_Survey_Raw[
+  Caste_1 == "Chrisitan", 
+  Caste_1 := "Christian"
+]
+
+# Convert to Ezhava
+Nilambur_Survey_Raw[
+  Caste_1 %in% "Ezhava/Thiyya/Tiyyar",
+  Caste_1 := "Ezhava"
+]
+
+# Convert Gender Code
+Nilambur_Survey_Raw <- Nilambur_Survey_Raw %>%
+  mutate(
+    Gender = case_when(
+    Gender == "1" ~ "Male",
+    Gender == "2" ~ "Female",
+      TRUE ~ as.character(Gender)
+    ))
+
+# Correct MLA_Name_Pref
+Nilambur_Survey_Raw <- Nilambur_Survey_Raw %>%
+  mutate(MLA_Name_Pref = case_when(
+    MLA_Name_Pref == "Aryadan Shoukath - UDF" ~ "UDF",
+    MLA_Name_Pref == "M. Swaraj - LDF" ~ "LDF",
+    MLA_Name_Pref == "P. V. Anvar - AITC-Trinamool Congress" |
+    MLA_Name_Pref == "P. V. Anvar - Independent" ~ "IND_Anvar",
+    MLA_Name_Pref == "Can’t Say" ~ "CNS",
+    MLA_Name_Pref == "Mohan George - BJP" ~ "BJP",
+    MLA_Name_Pref == "Sadiq Naduthodi - SDPI" ~ "SDPI",
+    TRUE ~ "Others" # This assigns "Others" to all unmatched values
+  ))
+
+```
+
+```{r Decode }
+# Decode Satisfaction Levels
+Nilambur_Survey_Raw <- Nilambur_Survey_Raw %>%
+  mutate(Satisfaction_Level_MLA = case_when(
+    Satisfaction_Level_MLA == 1 ~ "1_Fully_Satisfied",
+    Satisfaction_Level_MLA == 2 ~ "2_Somewhat_Satisfied",
+    Satisfaction_Level_MLA == 3 ~ "3_Somewhat_Dis_satisfied",
+    Satisfaction_Level_MLA == 4 ~ "4_Totally_Dis_satisfied",
+    Satisfaction_Level_MLA == 5 ~ "5_DNK",
+    TRUE ~ as.character(Satisfaction_Level_MLA) # Keep original value if no match
+  ))
+
+
+Nilambur_Survey_Raw <- Nilambur_Survey_Raw %>%
+  mutate(Satisfaction_Level_State_Govt = case_when(
+    Satisfaction_Level_State_Govt == 1 ~ "1_Fully_Satisfied",
+    Satisfaction_Level_State_Govt == 2 ~ "2_Somewhat_Satisfied",
+    Satisfaction_Level_State_Govt == 3 ~ "3_Somewhat_Dis_satisfied",
+    Satisfaction_Level_State_Govt == 4 ~ "4_Totally_Dis_satisfied",
+    Satisfaction_Level_State_Govt == 5 ~ "5_DNK",
+    TRUE ~ as.character(Satisfaction_Level_State_Govt) # Keep original value if no match
+  ))
+
+# Age Category
+Nilambur_Survey_Raw <- Nilambur_Survey_Raw %>%
+  mutate( 
+    Age = case_when(
+    Age == "1" ~ "18-23",
+    Age == "2" ~ "24-30",
+    Age == "3" ~ "31-45",
+    Age == "4" ~ "46-60",
+    Age == "5" ~ "60+"
+  ))
+
+# Create Broad Category from Caste_Category_1
+Nilambur_Survey_Raw <- Nilambur_Survey_Raw %>%
+  mutate( 
+    Broad_Category = case_when(
+    Category_Caste_1 == "Muslim" ~ "Muslim",
+    Category_Caste_1 == "Hindu OBC" ~ "Hindu",
+    Category_Caste_1 == "Christian" ~ "Christian",
+    Category_Caste_1 == "Hindu SC" ~ "Hindu_SC",
+    Category_Caste_1 == "Hindu General" ~ "Hindu",
+    Category_Caste_1 == "Hindu ST" ~ "Hindu_ST",
+    TRUE                  ~ as.character(Category_Caste_1)
+  ))
+```
+
+# Weighted Score Survey Tracker for UDF, LDF, BJP and IND for all the rounds
+
+```{r, fig.height=8, fig.width=7}
+
+# Sample data with MoE
+# Add a unique 'InstanceID' to differentiate survey entries, especially for duplicate dates
+survey_data <- data.frame(
+  InstanceID = 1:3, # Unique identifier for each row/survey instance
+  Date = c("2025-06-08",  "2025-06-14", "2025-06-17"),
+  UDF = round(c(47.8, 42.3, 45.40) , 2),
+  LDF = round(c(34.2, 38.87, 39.21) , 2),
+  BJP = round(c(3.7, 5.09, 4.20) , 2),
+  IND = round(c(7.4, 9.22, 5.96), 2),
+  UDF_MoE = round(c(1.5, 1.44, 1.89)*1.96, 2),  # MoE for UDF
+  LDF_MoE = round(c(1.5, 1.46, 1.86)*1.96, 2),  # MoE for LDF
+  BJP_MoE = round(c(0.59, 0.73, 0.83)*1.96, 2),  # MoE for BJP
+  IND_MoE = round(c(0.76, 0.87, 0.87)*1.96, 2)   # MoE for IND
+)
+
+# Convert the 'Date' column to Date format
+survey_data$Date <- as.Date(survey_data$Date, format = "%Y-%m-%d")
+
+# --- Reshape Data to Long Format ---
+# Step 1: Pivot the percentage columns
+survey_percentages_long <- survey_data %>%
+  select(Date, InstanceID, UDF, LDF, BJP, IND) %>%
+  pivot_longer(
+    cols = c(UDF, LDF, BJP, IND),
+    names_to = "Party",
+    values_to = "Percentage"
+  )
+
+# Step 2: Pivot the MoE columns
+survey_moe_long <- survey_data %>%
+  select(Date, InstanceID, UDF_MoE, LDF_MoE, BJP_MoE, IND_MoE) %>%
+  pivot_longer(
+    cols = c(UDF_MoE, LDF_MoE, BJP_MoE, IND_MoE),
+    names_to = "PartyMoE",
+    values_to = "MoE"
+  ) %>%
+  # Extract the party name from the MoE column name (e.g., "UDF_MoE" -> "UDF")
+  mutate(Party = sub("_MoE", "", PartyMoE)) %>%
+  select(Date, InstanceID, Party, MoE) # Keep relevant columns for joining
+
+# Step 3: Join the percentage and MoE long formats by Date, InstanceID, and Party
+survey_data_long <- left_join(survey_percentages_long, survey_moe_long, by = c("Date", "InstanceID", "Party")) %>%
+  mutate(
+    ymin = Percentage - MoE,  # Calculate lower bound for error bars
+    ymax = Percentage + MoE    # Calculate upper bound for error bars
+  )
+
+# --- Prepare X-axis Labels for Duplicate Dates ---
+# Create an ordered unique list of date-instance pairs for x-axis levels
+unique_date_instances <- survey_data_long %>%
+  distinct(Date, InstanceID) %>% # Get unique combinations of Date and InstanceID
+  arrange(Date, InstanceID) # Ensure they are in chronological and instance order
+
+# Generate labels for the x-axis, distinguishing duplicate dates
+unique_date_instances$Label <- format(unique_date_instances$Date, "%b %d")
+date_counts <- table(unique_date_instances$Date) # Count occurrences of each date
+
+for (i in 1:nrow(unique_date_instances)) {
+  current_date <- unique_date_instances$Date[i]
+  # If a date appears more than once, append an instance number for clarity
+  if (date_counts[as.character(current_date)] > 1) {
+    # Determine the instance number for the current date
+    instance_num <- sum(unique_date_instances$Date[1:i] == current_date)
+    unique_date_instances$Label[i] <- paste0(unique_date_instances$Label[i], " (", instance_num, ")")
+  }
+}
+
+# Create a factor for the x-axis, ensuring correct ordering based on InstanceID
+survey_data_long$DateFactor <- factor(
+  paste(survey_data_long$Date, survey_data_long$InstanceID),
+  levels = paste(unique_date_instances$Date, unique_date_instances$InstanceID)
+)
+
+# --- Create the Plot ---
+ggplot(survey_data_long, aes(x = DateFactor, y = Percentage, color = Party, group = Party)) +
+  geom_line(size = 1.5) +  # Line plot, adjusted size for clarity
+  geom_point(size = 3) +    # Add points to the lines, adjusted size
+  geom_errorbar(aes(ymin = ymin, ymax = ymax), width = 0.2, size = 0.8) +  # Add error bars
+  # Add percentage values above points again
+  geom_text(aes(label = sprintf("%.1f", Percentage)),hjust = 1.5, vjust = 0, size = 4, color = "black", show.legend = FALSE) +
+  scale_x_discrete(labels = unique_date_instances$Label) +  # Use the generated descriptive labels
+  scale_color_manual(
+    values = c("UDF" = "green", "LDF" = "red", "BJP" = "orange", "IND" = "yellow")  # Specify colors for each party
+  ) +
+  labs(
+    title = "Survey Tracker for UDF, LDF, BJP and IND",
+    x = "Date",
+    y = "Survey Percentage",
+    color = "Party" # Title for the legend
+  ) +
+  ylim(0, 55) + # Set y-axis limits
+  theme_economist() + # Apply The Economist theme
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 20, face = "bold"), # Center and style title
+    axis.text.x = element_text(angle = 45, hjust = 0)  # Rotate date labels for readability (changed hjust to 1)
+  )
+```
+
+```{r, UnWeighted MLA Choice}
+## UnWeighted MLA Choice
+MLA_Choice <- Nilambur_Survey_Raw[, .(Survey_Count = .N),
+                                  by = .(MLA_Name_Pref)][ ,
+                                MLA_Choice_Prop :=                           round(100*Survey_Count/sum(Survey_Count), 1)][
+                                  order(-MLA_Choice_Prop)
+                                ][,
+                                  .(MLA = MLA_Name_Pref, Unweighted_Prop = MLA_Choice_Prop)]
+
+kable(MLA_Choice)
+
+
+```
+
+## Caste/ Community Percentage As per Survey
+
+```{r Caste/ Community % Surveyed}
+
+Survey_Caste_Community <- Nilambur_Survey_Raw[, .(Survey_Count = .N), by = .(Caste_1)][
+  , `Survey_%` := round(100 * Survey_Count / sum(Survey_Count), 1)][
+  `Survey_%` > 0.0001  
+  ][!is.na(Caste_1)][
+  order(-`Survey_%`), .(Caste_1, `Survey_%`)]
+
+ 
+kable(Survey_Caste_Community[`Survey_%` > 0.5])
+```
+
+## Age Groups Prop as per Survey (Respondents) Compared With Actuals (Voters)
+
+```{r}
+Age_Category_Survey <- Nilambur_Survey_Raw[ , .(Survey_Count = .N), by = .(Age)][
+  , Survey_Prop := round(Survey_Count / sum(Survey_Count), 4)][
+   !is.na(Age) 
+  ][order(Age), .(Age, Survey_Prop)]
+
+
+Age_Nilambur <- fread("Age_Nilambur.csv")
+
+Age_Nilambur <- Age_Nilambur %>%
+  mutate(
+    Age = case_when(
+      between(Voter_Age, 18, 23) ~ "18-23",
+      between(Voter_Age, 24, 30) ~ "24-30",
+      between(Voter_Age, 31, 45) ~ "31-45",
+      between(Voter_Age, 46, 60) ~ "46-60",
+      Voter_Age    >  60      ~ "60+",
+      TRUE ~ NA_character_))
+
+Age_Category_Actual <- Age_Nilambur[ , .(Actual_Count = .N), by = .(Age)][
+  , Actual_Prop := round(Actual_Count / sum(Actual_Count), 4)][
+   !is.na(Age) 
+  ][order(Age), .(Age, Actual_Prop)]
+
+
+Age <- Age_Category_Actual[Age_Category_Survey, on = "Age"]
+kable(Age)
+```
+
+## Broad Religion and Caste_Category Prop as per Survey Compared With Actuals
+
+```{r Broad Religion and Caste_Category % Surveyed}
+
+
+Caste_Religion_Actual <- data.table(
+  Broad_Category = c("Muslim", "Hindu", "Christian", "Hindu_SC", "Hindu_ST"),
+  Actual_Prop = c(.439, .3424, .108, .0772, .0334)
+)
+
+
+Caste_Religion_Survey <- Nilambur_Survey_Raw[, .(Survey_Count = .N), by = .(Broad_Category)][
+  , Survey_Prop := round(Survey_Count / sum(Survey_Count), 4)][
+   !is.na(Broad_Category) 
+  ][
+   Broad_Category != "Others" 
+  ][
+  order(-Survey_Prop), .(Broad_Category, Survey_Prop)]
+
+
+Caste_Religion <- Caste_Religion_Actual[Caste_Religion_Survey, on = "Broad_Category"]
+  
+kable(Caste_Religion)
+
+
+```
+
+## Gender Prop as per Survey Compared With Actuals
+
+```{r Gender Distribution % As per Survey Compared With Actuals}
+
+Gender_Survey <- Nilambur_Survey_Raw[, .(Survey_Count = .N), by = .(Gender)][
+  , Survey_Prop := round(Survey_Count / sum(Survey_Count), 4)][!is.na(Gender)][
+  order(-Survey_Prop), .(Gender, Survey_Prop)]
+
+
+# The final electoral roll for the Nilambur Assembly constituency, published on Monday ahead of the upcoming byelections, has 2,32,384 voters.The list has 1,18,889 female voters, 1,13,486 male voters and nine third gender voters, Chief Electoral Officer (Kerala) Rathan U. Kelkar said.
+
+prop_gender <- c((round(113486/232384, 5)), (round(118889/232384, 5)))
+
+
+Gender_Actual <- data.table(
+  Gender = c("Male", "Female"),
+  Actual_Prop = prop_gender
+)
+
+Gender <- Gender_Actual[Gender_Survey, on = "Gender"]
+
+kable(Gender)
+```
+
+## Introduction to Raking
+
+This document demonstrates how to use iterative raking (or RIM weighting) to adjust the weights of survey respondents so that the sample's demographic profile matches known population characteristics. We have survey data from Nilambur and known population totals for **Gender**, **Age**, and **Broad Religious/Caste Category**. Raking will allow us to generate more accurate estimates of variables like MLA preference by correcting for over- or under-sampling of certain demographic groups.
+
+------------------------------------------------------------------------
+
+### 1. Preparing for Raking: Defining Population Targets
+
+First, we must prepare the data for the raking process. This involves two key steps: 1. Filtering our survey data to ensure there are no missing values in the variables we will use for weighting (Gender, Age, Broad_Category). 2. Creating "population margin" tables. The `rake` function in the `survey` package needs to know the target population counts for each category within our weighting variables. We calculate these by multiplying the known population proportions by our final sample size.
+
+```{r prepare_raking_targets}
+# Filter out rows with missing data in the raking variables
+Nilambur_Survey_For_Raking <- Nilambur_Survey_Raw %>%
+  filter(!is.na(Gender) & !is.na(Age) & !is.na(Broad_Category) & Broad_Category != "Others")
+
+# Use the final sample size to calculate population targets
+N_sample <- nrow(Nilambur_Survey_For_Raking)
+cat(paste("Final Sample Size after removing NAs:", N_sample, "\n\n"))
+
+# Target 1: Gender Population Distribution
+gender.dist <- data.frame(
+  Gender = Gender$Gender,
+  Freq = Gender$Actual_Prop * N_sample
+)
+kable(gender.dist, caption = "Target Population Counts for Gender")
+
+# Target 2: Age Population Distribution
+age.dist <- data.frame(
+  Age = Age$Age,
+  Freq = Age$Actual_Prop * N_sample
+)
+kable(age.dist, caption = "Target Population Counts for Age")
+
+# Target 3: Broad Category Population Distribution
+caste.dist <- data.frame(
+  Broad_Category = Caste_Religion$Broad_Category,
+  Freq = Caste_Religion$Actual_Prop * N_sample
+)
+kable(caste.dist, caption = "Target Population Counts for Broad Category")
+```
+
+------------------------------------------------------------------------
+
+### 2. Creating the Survey Design and Raking
+
+With our targets defined, we can now use the `survey` package. We first create an unweighted survey design object, giving each respondent an initial weight of 1. Then, we apply the `rake()` function. It iteratively adjusts the respondent weights until the sample's marginal distributions for Gender, Age, and Broad Category match our specified population targets.
+
+```{r perform_raking}
+# Create an unweighted survey design object
+nilambur.svy.unweighted <- svydesign(
+  ids = ~1, # No clustering
+  data = Nilambur_Survey_For_Raking,
+  weights = ~1 # Initial weight of 1 for all
+)
+
+# Perform iterative raking
+nilambur.svy.raked <- rake(
+  design = nilambur.svy.unweighted,
+  sample.margins = list(~Gender, ~Age, ~Broad_Category),# Creating form the survey Data
+  population.margins = list(gender.dist, age.dist, caste.dist)
+)
+
+# Display a summary of the new weights. They should be centered around 1.
+cat("Summary of the new survey weights:\n")
+summary(weights(nilambur.svy.raked))
+
+cat("\n", "\n", "If the raking is successful, the mean weights should centre around 1. Here in this exercise, the mean weights centre around", mean(weights(nilambur.svy.raked)))
+```
+
+------------------------------------------------------------------------
+
+### 3. Verifying the Raking Process
+
+It is crucial to check if the raking was successful. We can do this by calculating the weighted proportions of our raking variables in the sample. The results should now closely match the known population proportions. Using `svymean` provides a clear, simple table of the final proportions.
+
+```{r verify_raking}
+# Gender
+gender_props <- svymean(~Gender, design = nilambur.svy.raked)
+gender_props_df <- as.data.frame(gender_props)
+gender_props_df$mean <- round(100 * gender_props_df$mean, 1)
+gender_props_df$SE <- round(100 * gender_props_df$SE, 3)  # SE also in percentage
+kable(gender_props_df, caption = "Weighted Gender Proportions (%)")
+
+# Age
+age_props <- svymean(~Age, design = nilambur.svy.raked)
+age_props_df <- as.data.frame(age_props)
+age_props_df$mean <- round(100 * age_props_df$mean, 1)
+age_props_df$SE <- round(100 * age_props_df$SE, 3)
+kable(age_props_df, caption = "Weighted Age Proportions (%)")
+
+# Broad Category
+caste_props <- svymean(~Broad_Category, design = nilambur.svy.raked)
+caste_props_df <- as.data.frame(caste_props)
+caste_props_df$mean <- round(100 * caste_props_df$mean, 1)
+caste_props_df$SE <- round(100 * caste_props_df$SE, 3)
+kable(caste_props_df, caption = "Weighted Broad Category Proportions (%)")
+
+```
+
+------------------------------------------------------------------------
+
+### 4. Comparing Unweighted vs. Weighted Results
+
+Now for the final step: analyzing our variable of interest, MLA preference. We will calculate the weighted proportions and compare them to the original, unweighted results. We will also include the **Standard Error (SE)**, which measures the variability of our estimate, and the **Margin of Error (MOE)** at a 95% confidence level, which gives us a range within which the true population value likely falls.
+
+```{r compare_results}
+# Calculate weighted MLA preference using svymean, the correct function for this task
+weighted_mla_choice <- svymean(~MLA_Name_Pref, design = nilambur.svy.raked)
+
+# Format the results into a clean data.table
+# We extract the coefficients (proportions) and standard errors from the svymean object
+Weighted_MLA_Results <- data.table(
+  MLA = gsub("MLA_Name_Pref", "", names(coef(weighted_mla_choice))),
+  Weighted_Prop = coef(weighted_mla_choice) * 100,
+  SE = SE(weighted_mla_choice) * 100
+)
+
+# Calculate Margin of Error (MOE) at 95% Confidence Interval
+Weighted_MLA_Results[, MOE := 1.96 * SE]
+
+
+# Get the original, unweighted results for comparison
+Unweighted_MLA_Choice <- Nilambur_Survey_For_Raking[, .(Survey_Count = .N), by = .(MLA_Name_Pref)
+  ][, Unweighted_Prop := round(100 * Survey_Count / sum(Survey_Count), 2)
+  ][, .(MLA = MLA_Name_Pref, Unweighted_Prop)]
+
+
+# Merge and display the final comparison table
+Final_Results <- merge(
+  Unweighted_MLA_Choice,
+  Weighted_MLA_Results[, .(MLA, Weighted_Prop, SE, MOE)],
+  by = "MLA",
+  all = TRUE
+)[order(-Weighted_Prop)]
+
+# Display the final comparison table
+kable(Final_Results, 
+      caption = "Comparison of Unweighted vs. Weighted MLA Preference (%)", 
+      digits = 2,
+      col.names = c("MLA", "Unweighted Prop (%)", "Weighted Prop (%)", "Std. Error", "Margin of Error (95% CI)"))
+
+```
+
+## Raked_Design Weighted Diff Between the UDF and the LDF
+
+```{r}
+# 1. Calculate weighted MLA preference using svymean
+weighted_mla_choice <- svymean(~MLA_Name_Pref,
+                               design = nilambur.svy.raked,
+                               na.rm = TRUE)
+
+# 2. Define the contrast for UDF vs. LDF.
+# The names in the vector ('MLA_Name_PrefUDF', 'MLA_Name_PrefLDF') must match the names created by svymean() in the 'weighted_mla_choice' object
+contrast_definition <- list(diff = c("MLA_Name_PrefUDF" = 1,
+                                     "MLA_Name_PrefLDF" = -1))
+
+
+# 3. Apply the contrast to calculate the difference and its SE.
+udf_vs_ldf_diff <- svycontrast(weighted_mla_choice,
+                               contrasts = contrast_definition)
+
+
+# 4. 95% Confidence Interval for the difference is
+diff_CI_95 <- confint(udf_vs_ldf_diff)
+
+
+UDF_LDF_Diff <- data.table(
+  Weighted_Diff = round(coef(udf_vs_ldf_diff) * 100, 3),
+  SE = round(SE(udf_vs_ldf_diff) * 100, 3),
+  MOE = round(1.96*round(SE(udf_vs_ldf_diff) * 100, 3), 3)
+)
+
+Diff_CI_95 <- data.table(
+  Min_Diff = round(diff_CI_95[1,1]*100,3),
+  Max_Diff = round(diff_CI_95[1,2]*100,3)
+)
+
+Diff_Votes_CI_95 <- Diff_CI_95 %>%
+  mutate(Min_Diff = round(Min_Diff*174667/100),
+         Max_Diff = round(Max_Diff*174667/100))
+
+Exact_Votes_Diff <- pull(round(UDF_LDF_Diff[1,1]*174667/100))
+
+# 5. Print the result
+kable(UDF_LDF_Diff, caption = "The weighted Difference Between the Votes of UDF and the LDF")
+
+cat("The total difference expected between the Votes of UDF and LDF (Victory for UDF) is", Exact_Votes_Diff , "Votes.")
+```
+
+## Weighted MLA Choice vs Weighted Government Preference
+
+```{r}
+# options(digits = 3)
+
+# Calculate weighted MLA preference using svymean, the correct function for this task
+Pref_Govt <- svymean(~ Pref_Govt, design = nilambur.svy.raked)
+
+
+# As df and then as dt
+Pref_Govt <- as.data.frame(Pref_Govt)
+setDT(Pref_Govt, keep.rownames = "Pref_Govt")
+
+# Remove prefix "Pref_Govt" from row names
+Pref_Govt[ , Pref_Govt := sub("^Pref_Govt", "", Pref_Govt)]
+
+Pref_Govt <- Pref_Govt %>%
+  mutate(mean = round(100 * mean, 1), 
+    SE = round(100 * SE, 1)) %>%
+  rename(Govt = Pref_Govt)
+
+Pref_Govt <- Pref_Govt[order(-mean)]
+
+kable(Pref_Govt, caption = "Choice of Government")
+
+########## Government Pref by MLA Choice ##########
+MLA_Choice_Cross_Pref_Govt <- svyby( ~ Pref_Govt, ~MLA_Name_Pref, design = nilambur.svy.raked, svymean)
+
+# As df and then as dt
+MLA_Choice_Cross_Pref_Govt <- as.data.frame(MLA_Choice_Cross_Pref_Govt)
+setDT(MLA_Choice_Cross_Pref_Govt)
+
+# 1. Remove "Pref_Govt" from all column names
+setnames(MLA_Choice_Cross_Pref_Govt, 
+         old = names(MLA_Choice_Cross_Pref_Govt), 
+         new = gsub("Pref_Govt", "", names(MLA_Choice_Cross_Pref_Govt)))
+
+# 2. Rename "MLA_Name_Pref" to "MLA_Choice"
+setnames(MLA_Choice_Cross_Pref_Govt, "MLA_Name_Pref", "MLA_Choice")
+
+# Apply transformation only to numeric columns
+MLA_Choice_Cross_Pref_Govt[ , 
+  (names(.SD)) := lapply(.SD, function(x) round(100 * x, 1)), 
+  .SDcols = is.numeric
+]
+
+MLA_Choice_Cross_Pref_Govt <- MLA_Choice_Cross_Pref_Govt[ , .(MLA_Choice, UDF, LDF, NDA, CNS, Others)]
+
+kable(MLA_Choice_Cross_Pref_Govt)
+```
+
+An interesting observation from the cross-tabulation of votes between the MLA Choices and the choice for the Government shows that 73.2% of respondents, who preferred Independent Anwar as MLA, wanted to see the UDF Government! Even 16.9% of those who preferred MLA from LDF, wanted to have UDF Government!!!
+
+***This shows a strong anti-incumbancy against the LDF Government.***
+
+## Check the Quality and Method of Sample
+
+```{r, Check the Quality and Method of Sample}
+Polling_Booth_Summary <- Nilambur_Survey_Raw[ , .(Total = .N), by = Booth_No][order(Booth_No)]
+
+avg_resp_per_booth <- mean(Polling_Booth_Summary$Total)
+range_resp_per_booth <- range(Polling_Booth_Summary$Total)
+PB_Nos_Survey <- Polling_Booth_Summary$Booth_No
+
+cat("The list of PB Surveyed is:", PB_Nos_Survey, "\n", "\n")
+cat("Average Respondents per booth is:", avg_resp_per_booth, "\n", "\n")
+cat("The range of number of respondents in a booth is between:", range_resp_per_booth, "\n", "\n")
+cat("The total number of approved respondents are:", nrow(Nilambur_Survey_Raw))
+```
+
+The above list of Polling Booths surveyed shows that systematic random sampling has been used for this round, with a target of around 50 booths, with a gap of 5, starting from PB number 2 (expected to have been randomly selected number). With the average respondent per booth being around 16, the range of samples per booth between 13 and 19 are within acceptable limits. The total number of respondents 795 should give a maximum MOE of (+ and -) 3.48% at 95% Confidence Interval.
