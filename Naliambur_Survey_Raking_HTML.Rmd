@@ -102,7 +102,7 @@ Finally, a weighted crosstabulation was created using `svyby()` to explore the r
 
 ```{r}
 
-Nilambur_Survey_Raw <- fread("Nilambur_Round_3.csv", encoding = "UTF-8") %>%
+Nilambur_Survey_Raw <- fread("../Nilambur_Round_3.csv", encoding = "UTF-8") %>%
   select(
     Date_Collected,
     `Booth_No`,
@@ -371,7 +371,7 @@ Age_Category_Survey <- Nilambur_Survey_Raw[ , .(Survey_Count = .N), by = .(Age)]
   ][order(Age), .(Age, Survey_Prop)]
 
 
-Age_Nilambur <- fread("Age_Nilambur.csv")
+Age_Nilambur <- fread("../Age_Nilambur.csv")
 
 Age_Nilambur <- Age_Nilambur %>%
   mutate(
