@@ -357,27 +357,6 @@ display: none;
 </div>
 
 
-<pre class="r"><code>library(dplyr)
-library(rvest)
-library(stringr)
-library(writexl)
-library(readxl)
-library(data.table)
-library(purrr)
-library(knitr)
-library(ggplot2)
-library(sf)
-library(tidyr)
-library(ggthemes)
-library(here)
-library(stringr)
-library(scales)
-library(lubridate)
-library(flextable)
-library(ggrepel) 
-library(survey)
-library(kableExtra)
-library(SDAResources)</code></pre>
 <div id="final-assessment-on-the-survey" class="section level2">
 <h2>Final Assessment on the survey:</h2>
 <p><strong>Prediction</strong>: Through the survey and the methodology
@@ -478,240 +457,11 @@ cell.</li>
 <li>Over-adjustment risk if added dimension is weakly related to the
 variable of interest.</li>
 </ul>
-<pre class="r"><code>Nilambur_Survey_Raw &lt;- fread(&quot;../Nilambur_Round_3.csv&quot;, encoding = &quot;UTF-8&quot;) %&gt;%
-  select(
-    Date_Collected,
-    `Booth_No`,
-    Area_Type,
-    Main_Issue,
-    MLA_Name_Pref,
-    Satisfaction_Level_MLA,
-    Satisfaction_Level_State_Govt,
-    Pref_Govt,
-    Caste_1,
-    Category_Caste_1,
-    Caste_2,
-    Category_Caste_2,
-    Christian_Group,
-    Gender,
-    Age,
-    Occupation
-  ) %&gt;%
-  
- ## 3) Recode Category_Caste_1 from numeric → character
-  mutate(
-    Category_Caste_1 = case_when(
-      Category_Caste_1 == 1 ~ &quot;Hindu General&quot;,
-      Category_Caste_1 == 2 ~ &quot;Hindu OBC&quot;,
-      Category_Caste_1 == 3 ~ &quot;Hindu SC&quot;,
-      Category_Caste_1 == 4 ~ &quot;Hindu ST&quot;,
-      Category_Caste_1 == 5 ~ &quot;Muslim&quot;,
-      Category_Caste_1 == 6 ~ &quot;Christian&quot;,
-      Category_Caste_1 == 7 ~ &quot;Others&quot;,
-      TRUE                  ~ as.character(Category_Caste_1)
-    )
-  ) %&gt;%
-  
-  ## 5) Recode Pref_Govt from numeric → character
-  mutate(
-    Pref_Govt = case_when(
-      Pref_Govt == 1 ~ &quot;UDF&quot;,
-      Pref_Govt == 2 ~ &quot;LDF&quot;,
-      Pref_Govt == 3 ~ &quot;NDA&quot;,
-      Pref_Govt == 4 ~ &quot;CNS&quot;,
-      Pref_Govt == 5 ~ &quot;Others&quot;,
-      TRUE           ~ as.character(Pref_Govt)
-    )
-  )
-
-# Correct Christian Spelling
-Nilambur_Survey_Raw[
-  Caste_1 == &quot;Chrisitan&quot;, 
-  Caste_1 := &quot;Christian&quot;
-]
-
-# Convert to Ezhava
-Nilambur_Survey_Raw[
-  Caste_1 %in% &quot;Ezhava/Thiyya/Tiyyar&quot;,
-  Caste_1 := &quot;Ezhava&quot;
-]
-
-# Convert Gender Code
-Nilambur_Survey_Raw &lt;- Nilambur_Survey_Raw %&gt;%
-  mutate(
-    Gender = case_when(
-    Gender == &quot;1&quot; ~ &quot;Male&quot;,
-    Gender == &quot;2&quot; ~ &quot;Female&quot;,
-      TRUE ~ as.character(Gender)
-    ))
-
-# Correct MLA_Name_Pref
-Nilambur_Survey_Raw &lt;- Nilambur_Survey_Raw %&gt;%
-  mutate(MLA_Name_Pref = case_when(
-    MLA_Name_Pref == &quot;Aryadan Shoukath - UDF&quot; ~ &quot;UDF&quot;,
-    MLA_Name_Pref == &quot;M. Swaraj - LDF&quot; ~ &quot;LDF&quot;,
-    MLA_Name_Pref == &quot;P. V. Anvar - AITC-Trinamool Congress&quot; |
-    MLA_Name_Pref == &quot;P. V. Anvar - Independent&quot; ~ &quot;IND_Anvar&quot;,
-    MLA_Name_Pref == &quot;Can’t Say&quot; ~ &quot;CNS&quot;,
-    MLA_Name_Pref == &quot;Mohan George - BJP&quot; ~ &quot;BJP&quot;,
-    MLA_Name_Pref == &quot;Sadiq Naduthodi - SDPI&quot; ~ &quot;SDPI&quot;,
-    TRUE ~ &quot;Others&quot; # This assigns &quot;Others&quot; to all unmatched values
-  ))</code></pre>
-<pre class="r"><code># Decode Satisfaction Levels
-Nilambur_Survey_Raw &lt;- Nilambur_Survey_Raw %&gt;%
-  mutate(Satisfaction_Level_MLA = case_when(
-    Satisfaction_Level_MLA == 1 ~ &quot;1_Fully_Satisfied&quot;,
-    Satisfaction_Level_MLA == 2 ~ &quot;2_Somewhat_Satisfied&quot;,
-    Satisfaction_Level_MLA == 3 ~ &quot;3_Somewhat_Dis_satisfied&quot;,
-    Satisfaction_Level_MLA == 4 ~ &quot;4_Totally_Dis_satisfied&quot;,
-    Satisfaction_Level_MLA == 5 ~ &quot;5_DNK&quot;,
-    TRUE ~ as.character(Satisfaction_Level_MLA) # Keep original value if no match
-  ))
-
-
-Nilambur_Survey_Raw &lt;- Nilambur_Survey_Raw %&gt;%
-  mutate(Satisfaction_Level_State_Govt = case_when(
-    Satisfaction_Level_State_Govt == 1 ~ &quot;1_Fully_Satisfied&quot;,
-    Satisfaction_Level_State_Govt == 2 ~ &quot;2_Somewhat_Satisfied&quot;,
-    Satisfaction_Level_State_Govt == 3 ~ &quot;3_Somewhat_Dis_satisfied&quot;,
-    Satisfaction_Level_State_Govt == 4 ~ &quot;4_Totally_Dis_satisfied&quot;,
-    Satisfaction_Level_State_Govt == 5 ~ &quot;5_DNK&quot;,
-    TRUE ~ as.character(Satisfaction_Level_State_Govt) # Keep original value if no match
-  ))
-
-# Age Category
-Nilambur_Survey_Raw &lt;- Nilambur_Survey_Raw %&gt;%
-  mutate( 
-    Age = case_when(
-    Age == &quot;1&quot; ~ &quot;18-23&quot;,
-    Age == &quot;2&quot; ~ &quot;24-30&quot;,
-    Age == &quot;3&quot; ~ &quot;31-45&quot;,
-    Age == &quot;4&quot; ~ &quot;46-60&quot;,
-    Age == &quot;5&quot; ~ &quot;60+&quot;
-  ))
-
-# Create Broad Category from Caste_Category_1
-Nilambur_Survey_Raw &lt;- Nilambur_Survey_Raw %&gt;%
-  mutate( 
-    Broad_Category = case_when(
-    Category_Caste_1 == &quot;Muslim&quot; ~ &quot;Muslim&quot;,
-    Category_Caste_1 == &quot;Hindu OBC&quot; ~ &quot;Hindu&quot;,
-    Category_Caste_1 == &quot;Christian&quot; ~ &quot;Christian&quot;,
-    Category_Caste_1 == &quot;Hindu SC&quot; ~ &quot;Hindu_SC&quot;,
-    Category_Caste_1 == &quot;Hindu General&quot; ~ &quot;Hindu&quot;,
-    Category_Caste_1 == &quot;Hindu ST&quot; ~ &quot;Hindu_ST&quot;,
-    TRUE                  ~ as.character(Category_Caste_1)
-  ))</code></pre>
 </div>
 <div id="weighted-score-survey-tracker-for-udf-ldf-bjp-and-ind-for-all-the-rounds" class="section level1">
 <h1>Weighted Score Survey Tracker for UDF, LDF, BJP and IND for all the
 rounds</h1>
-<pre class="r"><code># Sample data with MoE
-# Add a unique &#39;InstanceID&#39; to differentiate survey entries, especially for duplicate dates
-survey_data &lt;- data.frame(
-  InstanceID = 1:3, # Unique identifier for each row/survey instance
-  Date = c(&quot;2025-06-08&quot;,  &quot;2025-06-14&quot;, &quot;2025-06-17&quot;),
-  UDF = round(c(47.8, 42.3, 45.40) , 2),
-  LDF = round(c(34.2, 38.87, 39.21) , 2),
-  BJP = round(c(3.7, 5.09, 4.20) , 2),
-  IND = round(c(7.4, 9.22, 5.96), 2),
-  UDF_MoE = round(c(1.5, 1.44, 1.89)*1.96, 2),  # MoE for UDF
-  LDF_MoE = round(c(1.5, 1.46, 1.86)*1.96, 2),  # MoE for LDF
-  BJP_MoE = round(c(0.59, 0.73, 0.83)*1.96, 2),  # MoE for BJP
-  IND_MoE = round(c(0.76, 0.87, 0.87)*1.96, 2)   # MoE for IND
-)
-
-# Convert the &#39;Date&#39; column to Date format
-survey_data$Date &lt;- as.Date(survey_data$Date, format = &quot;%Y-%m-%d&quot;)
-
-# --- Reshape Data to Long Format ---
-# Step 1: Pivot the percentage columns
-survey_percentages_long &lt;- survey_data %&gt;%
-  select(Date, InstanceID, UDF, LDF, BJP, IND) %&gt;%
-  pivot_longer(
-    cols = c(UDF, LDF, BJP, IND),
-    names_to = &quot;Party&quot;,
-    values_to = &quot;Percentage&quot;
-  )
-
-# Step 2: Pivot the MoE columns
-survey_moe_long &lt;- survey_data %&gt;%
-  select(Date, InstanceID, UDF_MoE, LDF_MoE, BJP_MoE, IND_MoE) %&gt;%
-  pivot_longer(
-    cols = c(UDF_MoE, LDF_MoE, BJP_MoE, IND_MoE),
-    names_to = &quot;PartyMoE&quot;,
-    values_to = &quot;MoE&quot;
-  ) %&gt;%
-  # Extract the party name from the MoE column name (e.g., &quot;UDF_MoE&quot; -&gt; &quot;UDF&quot;)
-  mutate(Party = sub(&quot;_MoE&quot;, &quot;&quot;, PartyMoE)) %&gt;%
-  select(Date, InstanceID, Party, MoE) # Keep relevant columns for joining
-
-# Step 3: Join the percentage and MoE long formats by Date, InstanceID, and Party
-survey_data_long &lt;- left_join(survey_percentages_long, survey_moe_long, by = c(&quot;Date&quot;, &quot;InstanceID&quot;, &quot;Party&quot;)) %&gt;%
-  mutate(
-    ymin = Percentage - MoE,  # Calculate lower bound for error bars
-    ymax = Percentage + MoE    # Calculate upper bound for error bars
-  )
-
-# --- Prepare X-axis Labels for Duplicate Dates ---
-# Create an ordered unique list of date-instance pairs for x-axis levels
-unique_date_instances &lt;- survey_data_long %&gt;%
-  distinct(Date, InstanceID) %&gt;% # Get unique combinations of Date and InstanceID
-  arrange(Date, InstanceID) # Ensure they are in chronological and instance order
-
-# Generate labels for the x-axis, distinguishing duplicate dates
-unique_date_instances$Label &lt;- format(unique_date_instances$Date, &quot;%b %d&quot;)
-date_counts &lt;- table(unique_date_instances$Date) # Count occurrences of each date
-
-for (i in 1:nrow(unique_date_instances)) {
-  current_date &lt;- unique_date_instances$Date[i]
-  # If a date appears more than once, append an instance number for clarity
-  if (date_counts[as.character(current_date)] &gt; 1) {
-    # Determine the instance number for the current date
-    instance_num &lt;- sum(unique_date_instances$Date[1:i] == current_date)
-    unique_date_instances$Label[i] &lt;- paste0(unique_date_instances$Label[i], &quot; (&quot;, instance_num, &quot;)&quot;)
-  }
-}
-
-# Create a factor for the x-axis, ensuring correct ordering based on InstanceID
-survey_data_long$DateFactor &lt;- factor(
-  paste(survey_data_long$Date, survey_data_long$InstanceID),
-  levels = paste(unique_date_instances$Date, unique_date_instances$InstanceID)
-)
-
-# --- Create the Plot ---
-ggplot(survey_data_long, aes(x = DateFactor, y = Percentage, color = Party, group = Party)) +
-  geom_line(size = 1.5) +  # Line plot, adjusted size for clarity
-  geom_point(size = 3) +    # Add points to the lines, adjusted size
-  geom_errorbar(aes(ymin = ymin, ymax = ymax), width = 0.2, size = 0.8) +  # Add error bars
-  # Add percentage values above points again
-  geom_text(aes(label = sprintf(&quot;%.1f&quot;, Percentage)),hjust = 1.5, vjust = 0, size = 4, color = &quot;black&quot;, show.legend = FALSE) +
-  scale_x_discrete(labels = unique_date_instances$Label) +  # Use the generated descriptive labels
-  scale_color_manual(
-    values = c(&quot;UDF&quot; = &quot;green&quot;, &quot;LDF&quot; = &quot;red&quot;, &quot;BJP&quot; = &quot;orange&quot;, &quot;IND&quot; = &quot;yellow&quot;)  # Specify colors for each party
-  ) +
-  labs(
-    title = &quot;Survey Tracker for UDF, LDF, BJP and IND&quot;,
-    x = &quot;Date&quot;,
-    y = &quot;Survey Percentage&quot;,
-    color = &quot;Party&quot; # Title for the legend
-  ) +
-  ylim(0, 55) + # Set y-axis limits
-  theme_economist() + # Apply The Economist theme
-  theme(
-    plot.title = element_text(hjust = 0.5, size = 20, face = &quot;bold&quot;), # Center and style title
-    axis.text.x = element_text(angle = 45, hjust = 0)  # Rotate date labels for readability (changed hjust to 1)
-  )</code></pre>
 <p><img role="img" src="data:image/png;base64,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4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl6wAA4JWsAwCAV7IOAABeyToAAHgl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" width="672" /></p>
-<pre class="r"><code>## UnWeighted MLA Choice
-MLA_Choice &lt;- Nilambur_Survey_Raw[, .(Survey_Count = .N),
-                                  by = .(MLA_Name_Pref)][ ,
-                                MLA_Choice_Prop :=                           round(100*Survey_Count/sum(Survey_Count), 1)][
-                                  order(-MLA_Choice_Prop)
-                                ][,
-                                  .(MLA = MLA_Name_Pref, Unweighted_Prop = MLA_Choice_Prop)]
-
-kable(MLA_Choice)</code></pre>
 <table>
 <thead>
 <tr class="header">
@@ -752,14 +502,6 @@ kable(MLA_Choice)</code></pre>
 </table>
 <div id="caste-community-percentage-as-per-survey" class="section level2">
 <h2>Caste/ Community Percentage As per Survey</h2>
-<pre class="r"><code>Survey_Caste_Community &lt;- Nilambur_Survey_Raw[, .(Survey_Count = .N), by = .(Caste_1)][
-  , `Survey_%` := round(100 * Survey_Count / sum(Survey_Count), 1)][
-  `Survey_%` &gt; 0.0001  
-  ][!is.na(Caste_1)][
-  order(-`Survey_%`), .(Caste_1, `Survey_%`)]
-
- 
-kable(Survey_Caste_Community[`Survey_%` &gt; 0.5])</code></pre>
 <table>
 <thead>
 <tr class="header">
@@ -814,32 +556,6 @@ kable(Survey_Caste_Community[`Survey_%` &gt; 0.5])</code></pre>
 <div id="age-groups-prop-as-per-survey-respondents-compared-with-actuals-voters" class="section level2">
 <h2>Age Groups Prop as per Survey (Respondents) Compared With Actuals
 (Voters)</h2>
-<pre class="r"><code>Age_Category_Survey &lt;- Nilambur_Survey_Raw[ , .(Survey_Count = .N), by = .(Age)][
-  , Survey_Prop := round(Survey_Count / sum(Survey_Count), 4)][
-   !is.na(Age) 
-  ][order(Age), .(Age, Survey_Prop)]
-
-
-Age_Nilambur &lt;- fread(&quot;../Age_Nilambur.csv&quot;)
-
-Age_Nilambur &lt;- Age_Nilambur %&gt;%
-  mutate(
-    Age = case_when(
-      between(Voter_Age, 18, 23) ~ &quot;18-23&quot;,
-      between(Voter_Age, 24, 30) ~ &quot;24-30&quot;,
-      between(Voter_Age, 31, 45) ~ &quot;31-45&quot;,
-      between(Voter_Age, 46, 60) ~ &quot;46-60&quot;,
-      Voter_Age    &gt;  60      ~ &quot;60+&quot;,
-      TRUE ~ NA_character_))
-
-Age_Category_Actual &lt;- Age_Nilambur[ , .(Actual_Count = .N), by = .(Age)][
-  , Actual_Prop := round(Actual_Count / sum(Actual_Count), 4)][
-   !is.na(Age) 
-  ][order(Age), .(Age, Actual_Prop)]
-
-
-Age &lt;- Age_Category_Actual[Age_Category_Survey, on = &quot;Age&quot;]
-kable(Age)</code></pre>
 <table>
 <thead>
 <tr class="header">
@@ -880,24 +596,6 @@ kable(Age)</code></pre>
 <div id="broad-religion-and-caste_category-prop-as-per-survey-compared-with-actuals" class="section level2">
 <h2>Broad Religion and Caste_Category Prop as per Survey Compared With
 Actuals</h2>
-<pre class="r"><code>Caste_Religion_Actual &lt;- data.table(
-  Broad_Category = c(&quot;Muslim&quot;, &quot;Hindu&quot;, &quot;Christian&quot;, &quot;Hindu_SC&quot;, &quot;Hindu_ST&quot;),
-  Actual_Prop = c(.439, .3424, .108, .0772, .0334)
-)
-
-
-Caste_Religion_Survey &lt;- Nilambur_Survey_Raw[, .(Survey_Count = .N), by = .(Broad_Category)][
-  , Survey_Prop := round(Survey_Count / sum(Survey_Count), 4)][
-   !is.na(Broad_Category) 
-  ][
-   Broad_Category != &quot;Others&quot; 
-  ][
-  order(-Survey_Prop), .(Broad_Category, Survey_Prop)]
-
-
-Caste_Religion &lt;- Caste_Religion_Actual[Caste_Religion_Survey, on = &quot;Broad_Category&quot;]
-  
-kable(Caste_Religion)</code></pre>
 <table>
 <thead>
 <tr class="header">
@@ -937,24 +635,6 @@ kable(Caste_Religion)</code></pre>
 </div>
 <div id="gender-prop-as-per-survey-compared-with-actuals" class="section level2">
 <h2>Gender Prop as per Survey Compared With Actuals</h2>
-<pre class="r"><code>Gender_Survey &lt;- Nilambur_Survey_Raw[, .(Survey_Count = .N), by = .(Gender)][
-  , Survey_Prop := round(Survey_Count / sum(Survey_Count), 4)][!is.na(Gender)][
-  order(-Survey_Prop), .(Gender, Survey_Prop)]
-
-
-# The final electoral roll for the Nilambur Assembly constituency, published on Monday ahead of the upcoming byelections, has 2,32,384 voters.The list has 1,18,889 female voters, 1,13,486 male voters and nine third gender voters, Chief Electoral Officer (Kerala) Rathan U. Kelkar said.
-
-prop_gender &lt;- c((round(113486/232384, 5)), (round(118889/232384, 5)))
-
-
-Gender_Actual &lt;- data.table(
-  Gender = c(&quot;Male&quot;, &quot;Female&quot;),
-  Actual_Prop = prop_gender
-)
-
-Gender &lt;- Gender_Actual[Gender_Survey, on = &quot;Gender&quot;]
-
-kable(Gender)</code></pre>
 <table>
 <thead>
 <tr class="header">
@@ -998,20 +678,7 @@ Broad_Category). 2. Creating “population margin” tables. The
 know the target population counts for each category within our weighting
 variables. We calculate these by multiplying the known population
 proportions by our final sample size.</p>
-<pre class="r"><code># Filter out rows with missing data in the raking variables
-Nilambur_Survey_For_Raking &lt;- Nilambur_Survey_Raw %&gt;%
-  filter(!is.na(Gender) &amp; !is.na(Age) &amp; !is.na(Broad_Category) &amp; Broad_Category != &quot;Others&quot;)
-
-# Use the final sample size to calculate population targets
-N_sample &lt;- nrow(Nilambur_Survey_For_Raking)
-cat(paste(&quot;Final Sample Size after removing NAs:&quot;, N_sample, &quot;\n\n&quot;))</code></pre>
 <p>Final Sample Size after removing NAs: 789</p>
-<pre class="r"><code># Target 1: Gender Population Distribution
-gender.dist &lt;- data.frame(
-  Gender = Gender$Gender,
-  Freq = Gender$Actual_Prop * N_sample
-)
-kable(gender.dist, caption = &quot;Target Population Counts for Gender&quot;)</code></pre>
 <table>
 <caption>Target Population Counts for Gender</caption>
 <thead>
@@ -1031,12 +698,6 @@ kable(gender.dist, caption = &quot;Target Population Counts for Gender&quot;)</c
 </tr>
 </tbody>
 </table>
-<pre class="r"><code># Target 2: Age Population Distribution
-age.dist &lt;- data.frame(
-  Age = Age$Age,
-  Freq = Age$Actual_Prop * N_sample
-)
-kable(age.dist, caption = &quot;Target Population Counts for Age&quot;)</code></pre>
 <table>
 <caption>Target Population Counts for Age</caption>
 <thead>
@@ -1068,12 +729,6 @@ kable(age.dist, caption = &quot;Target Population Counts for Age&quot;)</code></
 </tr>
 </tbody>
 </table>
-<pre class="r"><code># Target 3: Broad Category Population Distribution
-caste.dist &lt;- data.frame(
-  Broad_Category = Caste_Religion$Broad_Category,
-  Freq = Caste_Religion$Actual_Prop * N_sample
-)
-kable(caste.dist, caption = &quot;Target Population Counts for Broad Category&quot;)</code></pre>
 <table>
 <caption>Target Population Counts for Broad Category</caption>
 <thead>
@@ -1115,27 +770,8 @@ respondent an initial weight of 1. Then, we apply the
 <code>rake()</code> function. It iteratively adjusts the respondent
 weights until the sample’s marginal distributions for Gender, Age, and
 Broad Category match our specified population targets.</p>
-<pre class="r"><code># Create an unweighted survey design object
-nilambur.svy.unweighted &lt;- svydesign(
-  ids = ~1, # No clustering
-  data = Nilambur_Survey_For_Raking,
-  weights = ~1 # Initial weight of 1 for all
-)
-
-# Perform iterative raking
-nilambur.svy.raked &lt;- rake(
-  design = nilambur.svy.unweighted,
-  sample.margins = list(~Gender, ~Age, ~Broad_Category),# Creating form the survey Data
-  population.margins = list(gender.dist, age.dist, caste.dist)
-)
-
-# Display a summary of the new weights. They should be centered around 1.
-cat(&quot;Summary of the new survey weights:\n&quot;)</code></pre>
-<p>Summary of the new survey weights:</p>
-<pre class="r"><code>summary(weights(nilambur.svy.raked))</code></pre>
-<p>Min. 1st Qu. Median Mean 3rd Qu. Max. 0.5077 0.6101 0.9484 1.0000
-1.1719 2.3742</p>
-<pre class="r"><code>cat(&quot;\n&quot;, &quot;\n&quot;, &quot;If the raking is successful, the mean weights should centre around 1. Here in this exercise, the mean weights centre around&quot;, mean(weights(nilambur.svy.raked)))</code></pre>
+<p>Summary of the new survey weights: Min. 1st Qu. Median Mean 3rd Qu.
+Max. 0.5077 0.6101 0.9484 1.0000 1.1719 2.3742</p>
 <p>If the raking is successful, the mean weights should centre around 1.
 Here in this exercise, the mean weights centre around 1</p>
 <hr />
@@ -1147,12 +783,6 @@ by calculating the weighted proportions of our raking variables in the
 sample. The results should now closely match the known population
 proportions. Using <code>svymean</code> provides a clear, simple table
 of the final proportions.</p>
-<pre class="r"><code># Gender
-gender_props &lt;- svymean(~Gender, design = nilambur.svy.raked)
-gender_props_df &lt;- as.data.frame(gender_props)
-gender_props_df$mean &lt;- round(100 * gender_props_df$mean, 1)
-gender_props_df$SE &lt;- round(100 * gender_props_df$SE, 3)  # SE also in percentage
-kable(gender_props_df, caption = &quot;Weighted Gender Proportions (%)&quot;)</code></pre>
 <table>
 <caption>Weighted Gender Proportions (%)</caption>
 <thead>
@@ -1175,12 +805,6 @@ kable(gender_props_df, caption = &quot;Weighted Gender Proportions (%)&quot;)</c
 </tr>
 </tbody>
 </table>
-<pre class="r"><code># Age
-age_props &lt;- svymean(~Age, design = nilambur.svy.raked)
-age_props_df &lt;- as.data.frame(age_props)
-age_props_df$mean &lt;- round(100 * age_props_df$mean, 1)
-age_props_df$SE &lt;- round(100 * age_props_df$SE, 3)
-kable(age_props_df, caption = &quot;Weighted Age Proportions (%)&quot;)</code></pre>
 <table>
 <caption>Weighted Age Proportions (%)</caption>
 <thead>
@@ -1218,12 +842,6 @@ kable(age_props_df, caption = &quot;Weighted Age Proportions (%)&quot;)</code></
 </tr>
 </tbody>
 </table>
-<pre class="r"><code># Broad Category
-caste_props &lt;- svymean(~Broad_Category, design = nilambur.svy.raked)
-caste_props_df &lt;- as.data.frame(caste_props)
-caste_props_df$mean &lt;- round(100 * caste_props_df$mean, 1)
-caste_props_df$SE &lt;- round(100 * caste_props_df$SE, 3)
-kable(caste_props_df, caption = &quot;Weighted Broad Category Proportions (%)&quot;)</code></pre>
 <table>
 <caption>Weighted Broad Category Proportions (%)</caption>
 <thead>
@@ -1272,40 +890,6 @@ to the original, unweighted results. We will also include the
 our estimate, and the <strong>Margin of Error (MOE)</strong> at a 95%
 confidence level, which gives us a range within which the true
 population value likely falls.</p>
-<pre class="r"><code># Calculate weighted MLA preference using svymean, the correct function for this task
-weighted_mla_choice &lt;- svymean(~MLA_Name_Pref, design = nilambur.svy.raked)
-
-# Format the results into a clean data.table
-# We extract the coefficients (proportions) and standard errors from the svymean object
-Weighted_MLA_Results &lt;- data.table(
-  MLA = gsub(&quot;MLA_Name_Pref&quot;, &quot;&quot;, names(coef(weighted_mla_choice))),
-  Weighted_Prop = coef(weighted_mla_choice) * 100,
-  SE = SE(weighted_mla_choice) * 100
-)
-
-# Calculate Margin of Error (MOE) at 95% Confidence Interval
-Weighted_MLA_Results[, MOE := 1.96 * SE]
-
-
-# Get the original, unweighted results for comparison
-Unweighted_MLA_Choice &lt;- Nilambur_Survey_For_Raking[, .(Survey_Count = .N), by = .(MLA_Name_Pref)
-  ][, Unweighted_Prop := round(100 * Survey_Count / sum(Survey_Count), 2)
-  ][, .(MLA = MLA_Name_Pref, Unweighted_Prop)]
-
-
-# Merge and display the final comparison table
-Final_Results &lt;- merge(
-  Unweighted_MLA_Choice,
-  Weighted_MLA_Results[, .(MLA, Weighted_Prop, SE, MOE)],
-  by = &quot;MLA&quot;,
-  all = TRUE
-)[order(-Weighted_Prop)]
-
-# Display the final comparison table
-kable(Final_Results, 
-      caption = &quot;Comparison of Unweighted vs. Weighted MLA Preference (%)&quot;, 
-      digits = 2,
-      col.names = c(&quot;MLA&quot;, &quot;Unweighted Prop (%)&quot;, &quot;Weighted Prop (%)&quot;, &quot;Std. Error&quot;, &quot;Margin of Error (95% CI)&quot;))</code></pre>
 <table>
 <caption>Comparison of Unweighted vs. Weighted MLA Preference
 (%)</caption>
@@ -1381,45 +965,6 @@ kable(Final_Results,
 </div>
 <div id="raked_design-weighted-diff-between-the-udf-and-the-ldf" class="section level2">
 <h2>Raked_Design Weighted Diff Between the UDF and the LDF</h2>
-<pre class="r"><code># 1. Calculate weighted MLA preference using svymean
-weighted_mla_choice &lt;- svymean(~MLA_Name_Pref,
-                               design = nilambur.svy.raked,
-                               na.rm = TRUE)
-
-# 2. Define the contrast for UDF vs. LDF.
-# The names in the vector (&#39;MLA_Name_PrefUDF&#39;, &#39;MLA_Name_PrefLDF&#39;) must match the names created by svymean() in the &#39;weighted_mla_choice&#39; object
-contrast_definition &lt;- list(diff = c(&quot;MLA_Name_PrefUDF&quot; = 1,
-                                     &quot;MLA_Name_PrefLDF&quot; = -1))
-
-
-# 3. Apply the contrast to calculate the difference and its SE.
-udf_vs_ldf_diff &lt;- svycontrast(weighted_mla_choice,
-                               contrasts = contrast_definition)
-
-
-# 4. 95% Confidence Interval for the difference is
-diff_CI_95 &lt;- confint(udf_vs_ldf_diff)
-
-
-UDF_LDF_Diff &lt;- data.table(
-  Weighted_Diff = round(coef(udf_vs_ldf_diff) * 100, 3),
-  SE = round(SE(udf_vs_ldf_diff) * 100, 3),
-  MOE = round(1.96*round(SE(udf_vs_ldf_diff) * 100, 3), 3)
-)
-
-Diff_CI_95 &lt;- data.table(
-  Min_Diff = round(diff_CI_95[1,1]*100,3),
-  Max_Diff = round(diff_CI_95[1,2]*100,3)
-)
-
-Diff_Votes_CI_95 &lt;- Diff_CI_95 %&gt;%
-  mutate(Min_Diff = round(Min_Diff*174667/100),
-         Max_Diff = round(Max_Diff*174667/100))
-
-Exact_Votes_Diff &lt;- pull(round(UDF_LDF_Diff[1,1]*174667/100))
-
-# 5. Print the result
-kable(UDF_LDF_Diff, caption = &quot;The weighted Difference Between the Votes of UDF and the LDF&quot;)</code></pre>
 <table>
 <caption>The weighted Difference Between the Votes of UDF and the
 LDF</caption>
@@ -1438,33 +983,11 @@ LDF</caption>
 </tr>
 </tbody>
 </table>
-<pre class="r"><code>cat(&quot;The total difference expected between the Votes of UDF and LDF (Victory for UDF) is&quot;, Exact_Votes_Diff , &quot;Votes.&quot;)</code></pre>
 <p>The total difference expected between the Votes of UDF and LDF
 (Victory for UDF) is 10824 Votes.</p>
 </div>
 <div id="weighted-mla-choice-vs-weighted-government-preference" class="section level2">
 <h2>Weighted MLA Choice vs Weighted Government Preference</h2>
-<pre class="r"><code># options(digits = 3)
-
-# Calculate weighted MLA preference using svymean, the correct function for this task
-Pref_Govt &lt;- svymean(~ Pref_Govt, design = nilambur.svy.raked)
-
-
-# As df and then as dt
-Pref_Govt &lt;- as.data.frame(Pref_Govt)
-setDT(Pref_Govt, keep.rownames = &quot;Pref_Govt&quot;)
-
-# Remove prefix &quot;Pref_Govt&quot; from row names
-Pref_Govt[ , Pref_Govt := sub(&quot;^Pref_Govt&quot;, &quot;&quot;, Pref_Govt)]
-
-Pref_Govt &lt;- Pref_Govt %&gt;%
-  mutate(mean = round(100 * mean, 1), 
-    SE = round(100 * SE, 1)) %&gt;%
-  rename(Govt = Pref_Govt)
-
-Pref_Govt &lt;- Pref_Govt[order(-mean)]
-
-kable(Pref_Govt, caption = &quot;Choice of Government&quot;)</code></pre>
 <table>
 <caption>Choice of Government</caption>
 <thead>
@@ -1502,30 +1025,6 @@ kable(Pref_Govt, caption = &quot;Choice of Government&quot;)</code></pre>
 </tr>
 </tbody>
 </table>
-<pre class="r"><code>########## Government Pref by MLA Choice ##########
-MLA_Choice_Cross_Pref_Govt &lt;- svyby( ~ Pref_Govt, ~MLA_Name_Pref, design = nilambur.svy.raked, svymean)
-
-# As df and then as dt
-MLA_Choice_Cross_Pref_Govt &lt;- as.data.frame(MLA_Choice_Cross_Pref_Govt)
-setDT(MLA_Choice_Cross_Pref_Govt)
-
-# 1. Remove &quot;Pref_Govt&quot; from all column names
-setnames(MLA_Choice_Cross_Pref_Govt, 
-         old = names(MLA_Choice_Cross_Pref_Govt), 
-         new = gsub(&quot;Pref_Govt&quot;, &quot;&quot;, names(MLA_Choice_Cross_Pref_Govt)))
-
-# 2. Rename &quot;MLA_Name_Pref&quot; to &quot;MLA_Choice&quot;
-setnames(MLA_Choice_Cross_Pref_Govt, &quot;MLA_Name_Pref&quot;, &quot;MLA_Choice&quot;)
-
-# Apply transformation only to numeric columns
-MLA_Choice_Cross_Pref_Govt[ , 
-  (names(.SD)) := lapply(.SD, function(x) round(100 * x, 1)), 
-  .SDcols = is.numeric
-]
-
-MLA_Choice_Cross_Pref_Govt &lt;- MLA_Choice_Cross_Pref_Govt[ , .(MLA_Choice, UDF, LDF, NDA, CNS, Others)]
-
-kable(MLA_Choice_Cross_Pref_Govt)</code></pre>
 <table>
 <thead>
 <tr class="header">
@@ -1606,21 +1105,11 @@ Government.</em></strong></p>
 </div>
 <div id="check-the-quality-and-method-of-sample" class="section level2">
 <h2>Check the Quality and Method of Sample</h2>
-<pre class="r"><code>Polling_Booth_Summary &lt;- Nilambur_Survey_Raw[ , .(Total = .N), by = Booth_No][order(Booth_No)]
-
-avg_resp_per_booth &lt;- mean(Polling_Booth_Summary$Total)
-range_resp_per_booth &lt;- range(Polling_Booth_Summary$Total)
-PB_Nos_Survey &lt;- Polling_Booth_Summary$Booth_No
-
-cat(&quot;The list of PB Surveyed is:&quot;, PB_Nos_Survey, &quot;\n&quot;, &quot;\n&quot;)</code></pre>
 <p>The list of PB Surveyed is: 2 7 13 18 23 28 34 39 44 49 55 60 65 70
 76 81 86 91 97 102 107 112 118 123 128 134 139 144 149 155 160 165 170
 176 181 186 191 197 202 207 212 218 223 228 233 239 244 249 254 260</p>
-<pre class="r"><code>cat(&quot;Average Respondents per booth is:&quot;, avg_resp_per_booth, &quot;\n&quot;, &quot;\n&quot;)</code></pre>
 <p>Average Respondents per booth is: 15.9</p>
-<pre class="r"><code>cat(&quot;The range of number of respondents in a booth is between:&quot;, range_resp_per_booth, &quot;\n&quot;, &quot;\n&quot;)</code></pre>
 <p>The range of number of respondents in a booth is between: 13 19</p>
-<pre class="r"><code>cat(&quot;The total number of approved respondents are:&quot;, nrow(Nilambur_Survey_Raw))</code></pre>
 <p>The total number of approved respondents are: 795</p>
 <p>The above list of Polling Booths surveyed shows that systematic
 random sampling has been used for this round, with a target of around 50
